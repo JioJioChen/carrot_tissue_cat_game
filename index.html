@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>萝卜纸巾猫 - 最终增强版</title>
+    <title>萝卜纸巾猫</title>
     <style>
         :root { --main-bg: #fdf6e3; --accent: #ffb7b2; --puzzle-blue: #81d4fa; --puzzle-orange: #ffa726; --puzzle-dark-orange: #f57c00; }
         * { touch-action: none; -webkit-tap-highlight-color: transparent; }
@@ -32,7 +32,7 @@
 </head>
 <body>
 
-    <div class="stats">🎨 移动物品 指挥小猫 点亮拼图：<span id="progress">0</span>% | 移动计数：<span id="moveCount">0</span></div>
+    <div class="stats">🎨 移动物品 让小猫的行迹点亮拼图：<span id="progress">0</span>% | 移动计数：<span id="moveCount">0</span></div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="400"></canvas>
@@ -275,7 +275,7 @@ const AUDIO_CONFIG = {
             ctx.fillStyle = "#6d5d6e"; ctx.font = "bold 26px sans-serif"; ctx.textAlign="center";
             ctx.fillText(`✨蒸蚌！${moves}步就完成了拼图！✨`, 300, 180);
             ctx.font = "16px sans-serif"; ctx.fillStyle = "#aaa";
-            ctx.fillText(`点击屏幕任意位置重新挑战`, 300, 240);
+            ctx.fillText(`全网最佳：1步 是否重新挑战？`, 300, 240);
         }
     }
     update();
