@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>萝卜纸巾猫 - 最终增强版</title>
+    <style>
+        :root { --main-bg: #fdf6e3; --accent: #ffb7b2; --puzzle-blue: #81d4fa; --puzzle-orange: #ffa726; --puzzle-dark-orange: #f57c00; }
+        * { touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { 
+            background: var(--main-bg); font-family: "Microsoft YaHei", sans-serif; 
+            display: flex; flex-direction: column; align-items: center; 
+            margin: 0; padding-top: 20px; overflow: hidden; width: 100vw; height: 100vh;
+        }
+        #game-container { 
+            position: relative; border: 8px solid white; border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: #fff;
+            max-width: 95vw;
+        }
+        canvas { max-width: 100%; height: auto; display: block; }
+        .ui-panel { margin-top: 15px; display: flex; gap: 10px; height: 50px; align-items: center; }
+        button { 
+            padding: 8px 15px; border: none; border-radius: 50px; background: white; 
+            color: #aaa; cursor: pointer; border: 2px solid #eee; font-weight: bold; font-size: 14px;
+        }
+        button.active-cmd { background: var(--accent); color: white; border-color: var(--accent); }
+        #feed-btn { background: #ffd3b6; color: #d48166; visibility: hidden; border-color: #ffb7b2; }
+        #feed-btn.show { visibility: visible; animation: pop 0.3s forwards; }
+        @keyframes pop { from {transform:scale(0)} to {transform:scale(1)} }
+        .stats { font-size: 14px; margin-bottom: 8px; color: #888; text-align: center; width: 90%; }
+    </style>
+</head>
+<body>
+
+    <div class="stats">🎨 移动物品 指挥小猫 点亮拼图：<span id="progress">0</span>% | 移动计数：<span id="moveCount">0</span></div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+    </div>
+
+    <div class="ui-panel">
+        <button id="btn-carrot" onclick="triggerAction('carrot')">🥕 萝卜</button>
+        <button id="btn-tissue" onclick="triggerAction('tissue')">🧻 纸巾</button>
+        <button id="feed-btn" onclick="triggerAction('feed')">🍲 投喂</button>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const moveDisplay = document.getElementById('moveCount');
+    const progressDisplay = document.getElementById('progress');
+    const feedBtn = document.getElementById('feed-btn');
+
+    // ==========================================
+    // 🎵 音效配置
+    // ==========================================
+const AUDIO_CONFIG = {
+        carrot: 'carrot.mp3',
+        tissue: 'tissue.mp3',
+        feed:   'feed1.mp3',
+        win:    'feed2.mp3'
+    };
+
+    const sounds = {
+        carrot: new Audio(AUDIO_CONFIG.carrot),
+        tissue: new Audio(AUDIO_CONFIG.tissue),
+        feed:   new Audio(AUDIO_CONFIG.feed),
+        win:    new Audio(AUDIO_CONFIG.win)
+    };
+
+    let hasWon = false;
+    let moves = 0;
+    let draggingItem = null;
+
+    // ==========================================
+    // 🔄 游戏重置逻辑
+    // ==========================================
+    function resetGame() {
+        moves = 0;
+        hasWon = false;
+        moveDisplay.innerText = "0";
+        progressDisplay.innerText = "0";
+        
+        shapes.forEach(s => s.revealed = false);
+        
+        items.carrot.x = 80; items.carrot.y = 320;
+        items.tissue.x = 520; items.tissue.y = 150;
+        items.slipper.x = 300; items.slipper.y = 340;
+
+        cat.x = 300; cat.y = 200;
+        cat.targetX = 300; cat.targetY = 200;
+        cat.state = 'IDLE';
+        cat.rotation = 0;
+        cat.speed = 0;
+        cat.currentCommand = null;
+        cat.currentTargetKey = null;
+        cat.visitHistory = [];
+
+        document.querySelectorAll('.ui-panel button').forEach(b => b.classList.remove('active-cmd'));
+        feedBtn.classList.remove('show');
+    }
+
+    function triggerAction(type) {
+        if (hasWon) return; // 胜利状态禁用按钮
+        // 手机浏览器解锁音频
+        Object.values(sounds).forEach(s => { if(s.paused && s.currentTime === 0) s.load(); });
+
+        const s = sounds[type];
+        if (s) { s.pause(); s.currentTime = 0; s.play().catch(()=>{}); }
+        if (type === 'feed') feedCat(); else setCommand(type);
+    }
+
+    // ==========================================
+    // 📱 手机端触摸逻辑
+    // ==========================================
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    }
+
+    function handleStart(e) {
+        if (hasWon) {
+            resetGame();
+            return;
+        }
+
+        const pos = getPos(e);
+        for (let key in items) {
+            let it = items[key];
+            if (Math.hypot(it.x - pos.x, it.y - pos.y) < it.radius + 15) {
+                if (key === cat.currentTargetKey) continue;
+                draggingItem = it; moves++; moveDisplay.innerText = moves; 
+                Object.values(sounds).forEach(s => { s.load(); }); 
+                break;
+            }
+        }
+    }
+
+    function handleMove(e) {
+        if (!draggingItem || hasWon) return;
+        const pos = getPos(e);
+        draggingItem.x = pos.x; draggingItem.y = pos.y;
+    }
+
+    function handleEnd() { draggingItem = null; }
+
+    canvas.addEventListener('touchstart', handleStart, {passive: false});
+    window.addEventListener('touchmove', handleMove, {passive: false});
+    window.addEventListener('touchend', handleEnd, {passive: false});
+    canvas.onmousedown = handleStart;
+    window.onmousemove = handleMove;
+    window.onmouseup = handleEnd;
+
+    // ==========================================
+    // 🎮 游戏核心数据与逻辑
+    // ==========================================
+    const shapes = [
+        { points: [[0,0], [600,0], [600,80], [0,80]], color: '#81d4fa', revealed: false },
+        { points: [[0,80], [250,80], [220,220], [220,350], [0,350], [0,80]], color: '#81d4fa', revealed: false },
+        { points: [[600,80], [350,80], [380,220], [380,350], [600,350], [600,80]], color: '#81d4fa', revealed: false },
+        { points: [[0,350], [600,350], [600,400], [0,400]], color: '#81d4fa', revealed: false },
+        { points: [[220,220], [380,220], [380,350], [220,350]], color: '#fb8c00', revealed: false },
+        { points: [[250,80], [350,80], [380,220], [220,220]], color: '#ffa726', revealed: false },
+        { points: [[250,80], [210,30], [270,80]], color: '#f57c00', revealed: false },
+        { points: [[350,80], [390,30], [330,80]], color: '#f57c00', revealed: false }
+    ];
+
+    let items = {
+        carrot: { x: 80, y: 320, color: '#ffad60', radius: 25 },
+        tissue: { x: 520, y: 150, color: '#95e1d3', radius: 25 },
+        slipper: { x: 300, y: 340, color: '#aa96da', radius: 25 }
+    };
+
+    let cat = { x: 300, y: 200, targetX: 300, targetY: 200, state: 'IDLE', speed: 0, rotation: 0, spinLeft: 0, pivotX: null, pivotY: null, currentCommand: null, currentTargetKey: null, visitHistory: [] };
+
+    function setCommand(type) {
+        if (cat.state === 'FEEDING') return;
+        cat.currentCommand = type; cat.state = 'WALKING';
+        pickNextPatrolTarget();
+        document.querySelectorAll('.ui-panel button').forEach(b => b.classList.remove('active-cmd'));
+        document.getElementById('btn-' + type).classList.add('active-cmd');
+    }
+
+    function feedCat() {
+        cat.state = 'FEEDING'; cat.spinLeft = 360;
+        feedBtn.classList.remove('show');
+        document.querySelectorAll('.ui-panel button').forEach(b => b.classList.remove('active-cmd'));
+    }
+
+    function pickNextPatrolTarget() {
+        if (cat.currentTargetKey) { cat.visitHistory.push(cat.currentTargetKey); if (cat.visitHistory.length > 2) cat.visitHistory.shift(); }
+        const allKeys = Object.keys(items);
+        let filtered = allKeys.filter(k => !cat.visitHistory.includes(k));
+        if (filtered.length === 0) filtered = allKeys.filter(k => k !== cat.currentTargetKey);
+        const nextKey = filtered[Math.floor(Math.random() * filtered.length)];
+        cat.currentTargetKey = nextKey; cat.targetX = items[nextKey].x; cat.targetY = items[nextKey].y;
+    }
+
+    function checkPuzzleUnlock() {
+        shapes.forEach(s => {
+            if (!s.revealed && isPointInPoly([cat.x, cat.y], s.points)) {
+                s.revealed = true;
+                const prog = Math.floor((shapes.filter(sh=>sh.revealed).length/shapes.length)*100);
+                progressDisplay.innerText = prog;
+                if (prog === 100 && !hasWon) {
+                    hasWon = true;
+                    sounds.win.play().catch(()=>{});
+                }
+            }
+        });
+    }
+
+    function isPointInPoly(pt, poly) {
+        let x = pt[0], y = pt[1], inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            let xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+            if (((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+
+    function update() {
+        if (cat.state === 'WALKING') {
+            let dx = cat.targetX - cat.x, dy = cat.targetY - cat.y;
+            let dist = Math.hypot(dx, dy);
+            let targetSpeed = (dist < 120) ? 0.8 : 4.2;
+            cat.speed += (targetSpeed - cat.speed) * 0.1; 
+            if (dist > 5) { cat.x += (dx/dist) * cat.speed; cat.y += (dy/dist) * cat.speed; } 
+            else { pickNextPatrolTarget(); }
+            checkPuzzleUnlock();
+            if (cat.currentCommand) {
+                let targetItem = items[cat.currentCommand];
+                if (Math.hypot(cat.x - targetItem.x, cat.y - targetItem.y) < 120) feedBtn.classList.add('show');
+                else feedBtn.classList.remove('show');
+            }
+        } else if (cat.state === 'FEEDING') {
+            if (cat.spinLeft > 0) {
+                cat.rotation += 12; cat.spinLeft -= 12;
+                if (!cat.pivotX) { cat.pivotX = cat.x; cat.pivotY = cat.y; }
+                let angle = (cat.spinLeft * Math.PI) / 180;
+                cat.x = cat.pivotX + Math.cos(angle) * 30; cat.y = cat.pivotY + Math.sin(angle) * 30;
+                checkPuzzleUnlock();
+            } else { cat.state = 'IDLE'; cat.rotation = 0; cat.pivotX = null; cat.pivotY = null; cat.speed = 0; cat.currentCommand = null; cat.currentTargetKey = null; }
+        }
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    function draw() {
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        shapes.forEach(s => {
+            ctx.save(); ctx.globalAlpha = s.revealed ? 1.0 : 0.1; ctx.fillStyle = s.color;
+            ctx.beginPath(); ctx.moveTo(s.points[0][0], s.points[0][1]);
+            for(let i=1; i<s.points.length; i++) ctx.lineTo(s.points[i][0], s.points[i][1]);
+            ctx.closePath(); ctx.fill(); ctx.restore();
+        });
+        for (let key in items) {
+            let it = items[key]; ctx.fillStyle = it.color; ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "#6d5d6e"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+            ctx.fillText((key==='carrot'?'萝卜':(key==='tissue'?'纸巾':'拖鞋')), it.x, it.y + 40);
+        }
+        ctx.save(); ctx.translate(cat.x, cat.y); ctx.rotate(cat.rotation * Math.PI / 180);
+        ctx.fillStyle = "#555"; ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(-15,-20); ctx.lineTo(-4,-12); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(10,-8); ctx.lineTo(15,-20); ctx.lineTo(4,-12); ctx.fill();
+        ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#333"; ctx.beginPath(); ctx.arc(-6, -2, 2, 0, Math.PI*2); ctx.arc(6, -2, 2, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        if(hasWon) {
+            ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fillRect(0,0,600,400);
+            ctx.fillStyle = "#6d5d6e"; ctx.font = "bold 26px sans-serif"; ctx.textAlign="center";
+            ctx.fillText(`✨蒸蚌！${moves}步就完成了拼图！✨`, 300, 180);
+            ctx.font = "16px sans-serif"; ctx.fillStyle = "#aaa";
+            ctx.fillText(`点击屏幕任意位置重新挑战`, 300, 240);
+        }
+    }
+    update();
+</script>
+</body>
+</html>
