@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>萝卜纸巾猫 - 大耳朵版</title>
+    <title>萝卜纸巾猫</title>
     <style>
         :root { --main-bg: #fdf6e3; --accent: #ffb7b2; }
         * { touch-action: none; -webkit-tap-highlight-color: transparent; }
@@ -32,7 +32,7 @@
 </head>
 <body>
 
-    <div class="stats">🎨 移动物品 让小猫点亮拼图：<span id="progress">0</span>% | 移动：<span id="moveCount">0</span></div>
+    <div class="stats">🎨 移动物品◉ 用小猫的脚印点亮拼图：<span id="progress">0</span>% | 移动步数：<span id="moveCount">0</span></div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="400"></canvas>
@@ -56,23 +56,20 @@
     for (let key in AUDIO_CONFIG) { sounds[key] = new Audio(AUDIO_CONFIG[key]); }
 
     let hasWon = false, moves = 0, draggingItem = null;
+    
+    // --- 引导系统状态 ---
+    let lastMoveTime = Date.now();
+    let guideActive = false;    
+    let tutorialFinished = false; 
 
-    // 🎨 严格遵循原则：铺满、不重叠、形状比例回退
     const shapes = [
-        // --- 蓝色背景区域 ---
         { points: [[0,0], [600,0], [600,80], [400,80], [350,80], [250,80], [200,80], [0,80]], color: '#81d4fa', revealed: false, scale: 1, center: [300, 40] },
         { points: [[0,80], [250,80], [220,220], [220,350], [0,350], [0,80]], color: '#81d4fa', revealed: false, scale: 1, center: [110, 215] },
         { points: [[600,80], [350,80], [380,220], [380,350], [600,350], [600,80]], color: '#81d4fa', revealed: false, scale: 1, center: [490, 215] },
         { points: [[0,350], [600,350], [600,400], [0,400]], color: '#81d4fa', revealed: false, scale: 1, center: [300, 375] },
-        
-        // --- 橘猫主体区域 ---
-        // 身体
-        { points: [[220,220], [380,220], [380,360], [220,360]], color: '#fb8c00', revealed: false, scale: 1, center: [300, 285] },
-        // 头部
+        { points: [[220,220], [380,220], [380,360], [220,360]], color: '#fb8c00', revealed: false, scale: 1, center: [300, 290] },
         { points: [[250,80], [350,80], [380,220], [220,220]], color: '#ffa726', revealed: false, scale: 1, center: [300, 150] },
-        // 左大耳朵 (基于原版放大)
         { points: [[250,80], [200,10], [290,80]], color: '#f57c00', revealed: false, scale: 1, center: [245, 55] },
-        // 右大耳朵 (基于原版放大)
         { points: [[350,80], [400,10], [310,80]], color: '#f57c00', revealed: false, scale: 1, center: [355, 55] }
     ];
 
@@ -86,9 +83,11 @@
 
     function resetGame() {
         moves = 0; hasWon = false;
+        lastMoveTime = Date.now();
+        guideActive = false;
         moveDisplay.innerText = "0"; progressDisplay.innerText = "0";
         shapes.forEach(s => { s.revealed = false; s.scale = 1; });
-        items.carrot.x = 80; items.carrot.y = 320;
+        items.carrot.x = 80; items.carrot.y = 350;
         items.tissue.x = 520; items.tissue.y = 150;
         items.slipper.x = 300; items.slipper.y = 340;
         cat.x = 300; cat.y = 200; cat.targetX = 300; cat.targetY = 200;
@@ -137,6 +136,15 @@
         }
     }
 
+    function handleEnd() {
+        if (draggingItem) {
+            tutorialFinished = true;
+            guideActive = false;
+            lastMoveTime = Date.now();
+            draggingItem = null;
+        }
+    }
+
     function handleMove(e) {
         if (draggingItem && !hasWon) { 
             const pos = getPos(e);
@@ -149,10 +157,10 @@
 
     canvas.addEventListener('mousedown', handleStart);
     window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', () => draggingItem = null);
+    window.addEventListener('mouseup', handleEnd);
     canvas.addEventListener('touchstart', handleStart, {passive: false});
     window.addEventListener('touchmove', handleMove, {passive: false});
-    window.addEventListener('touchend', () => draggingItem = null);
+    window.addEventListener('touchend', handleEnd);
 
     function isPointInPoly(pt, poly) {
         let x = pt[0], y = pt[1], inside = false;
@@ -235,6 +243,38 @@
             ctx.fillStyle = "white"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText((key==='carrot'?'萝卜':(key==='tissue'?'纸巾':'拖鞋')), it.x, it.y);
             ctx.restore();
+        }
+
+        // --- 引导系统 ---
+        if (!tutorialFinished && !hasWon) {
+            let timeSinceMove = (Date.now() - lastMoveTime) / 1000;
+            if (guideActive || timeSinceMove > 30) {
+                guideActive = true; 
+                let pulse = 1 + Math.sin(Date.now() / 300) * 0.15;
+                let ringRadius = items.carrot.radius * pulse * 1.3; // 统一半径
+                ctx.save();
+                ctx.fillStyle = "rgba(212, 129, 102, 0.9)";
+                ctx.font = "bold 18px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("✨ 请拖动萝卜点亮这里的拼图 ✨", 300, 30);
+                
+                ctx.setLineDash([6, 4]);
+                ctx.lineWidth = 3;
+
+                // 起点光圈 (萝卜)
+                ctx.beginPath();
+                ctx.arc(items.carrot.x, items.carrot.y, ringRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(255, 173, 96, 0.8)";
+                ctx.stroke();
+
+                // 目标光圈 (上移至 y=60，半径与萝卜圈一致)
+                ctx.beginPath();
+                ctx.arc(300, 60, ringRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(129, 212, 250, 0.8)"; 
+                ctx.stroke();
+
+                ctx.restore();
+            }
         }
 
         ctx.save(); ctx.translate(cat.x, cat.y); ctx.rotate(cat.rotation * Math.PI / 180);
