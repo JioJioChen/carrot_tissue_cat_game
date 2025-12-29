@@ -130,7 +130,10 @@
         for (let key in items) {
             let it = items[key];
             if (Math.hypot(it.x - pos.x, it.y - pos.y) < 35) {
-                if (key === cat.currentTargetKey) return; 
+                // --- 核心优化点：锁定判定逻辑 ---
+                // 只有小猫处于行走状态，且当前物品正是目标物品时，才禁止拖动
+                if (cat.state === 'WALKING' && key === cat.currentTargetKey) return; 
+                
                 draggingItem = it; moves++; moveDisplay.innerText = moves; break;
             }
         }
@@ -195,6 +198,12 @@
     }
 
     function update() {
+        // 更新猫咪坐标跟随物品（即使在行走时也能实时更新目标）
+        if (cat.state === 'WALKING' && cat.currentTargetKey) {
+            cat.targetX = items[cat.currentTargetKey].x;
+            cat.targetY = items[cat.currentTargetKey].y;
+        }
+
         if (cat.state === 'WALKING') {
             let dx = cat.targetX - cat.x, dy = cat.targetY - cat.y;
             let dist = Math.hypot(dx, dy);
@@ -251,7 +260,7 @@
             if (guideActive || timeSinceMove > 30) {
                 guideActive = true; 
                 let pulse = 1 + Math.sin(Date.now() / 300) * 0.15;
-                let ringRadius = items.carrot.radius * pulse * 1.3; // 统一半径
+                let ringRadius = items.carrot.radius * pulse * 1.3;
                 ctx.save();
                 ctx.fillStyle = "rgba(212, 129, 102, 0.9)";
                 ctx.font = "bold 18px sans-serif";
@@ -261,13 +270,11 @@
                 ctx.setLineDash([6, 4]);
                 ctx.lineWidth = 3;
 
-                // 起点光圈 (萝卜)
                 ctx.beginPath();
                 ctx.arc(items.carrot.x, items.carrot.y, ringRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = "rgba(255, 173, 96, 0.8)";
                 ctx.stroke();
 
-                // 目标光圈 (上移至 y=60，半径与萝卜圈一致)
                 ctx.beginPath();
                 ctx.arc(200, 60, ringRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = "rgba(129, 212, 250, 0.8)"; 
