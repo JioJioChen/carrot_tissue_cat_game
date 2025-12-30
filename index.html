@@ -410,7 +410,7 @@
         // --- 核心修复与优化：缩短至20秒，加深蓝色指示圈 ---
         if (clickTutorialFinished && !tutorialFinished && !hasWon) {
             let timeSinceMove = (Date.now() - lastMoveTime) / 1000;
-            if (timeSinceMove > 20 || guideActive) { // 缩短为20秒触发
+            if (timeSinceMove > 10 || guideActive) { // 缩短为20秒触发
                 guideActive = true; 
                 let pulse = 1 + Math.sin(Date.now() / 250) * 0.2; // 加大跳动幅度
                 ctx.save();
