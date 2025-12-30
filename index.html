@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>萝卜纸巾猫</title>
     <style>
-        :root { --main-bg: #fdf6e3; --accent: #ffb7b2; }
+        :root { --main-bg: #fdf6e3; --accent: #ffb7b2; --border-dark: #6d5d6e; --progress-color: #fb8c00; --star-gold: #ffcc33; --guide-teal: #00897b; }
         * { touch-action: none; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         
-        /* 关键：使用 Flexbox 实现全屏幕绝对居中 */
         body { 
             background: var(--main-bg); 
             font-family: "Microsoft YaHei", sans-serif; 
@@ -18,88 +17,163 @@
             align-items: center;
             justify-content: center;
             width: 100vw;
-            height: 100dvh; /* 动态视口高度，适配移动端工具栏 */
+            height: 100dvh;
             overflow: hidden;
         }
 
-        /* 统计数据放在游戏上方 */
-        .stats { 
-            font-size: 14px; 
-            margin-bottom: 12px; 
-            color: #888; 
-            text-align: center; 
+        .header-ui {
             width: 100%;
+            max-width: 600px;
+            padding: 0 20px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stats-text { 
+            font-size: 14px; 
+            color: #888; 
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .progress-container {
+            width: 100%; height: 10px;
+            background: #eee; border-radius: 10px;
+            overflow: hidden; border: 2px solid #fff;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        #progress-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #ffd3b6, var(--progress-color));
+            transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .progress-highlight {
+            font-size: 18px; font-weight: 900;
+            color: var(--progress-color); display: inline-block;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bump { transform: scale(1.4); }
+
+        .game-guide-text {
+            font-size: 13px;
+            color: #a09383;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+            font-weight: 500;
         }
 
         #game-container { 
             position: relative; 
-            border: 6px solid white; 
+            border: 6px solid var(--border-dark); 
             border-radius: 20px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+            box-shadow: 0 8px 24px rgba(109, 93, 110, 0.15); 
             background: #fff;
             max-width: 95vw;
-            /* 确保容器高度不会超过屏幕 */
-            max-height: 70vh; 
+            max-height: 60vh; 
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         canvas { 
-            max-width: 100%; 
-            max-height: 100%;
-            height: auto; 
-            display: block; 
-            border-radius: 12px; 
-            object-fit: contain;
+            max-width: 100%; max-height: 100%;
+            height: auto; display: block; 
+            border-radius: 12px; object-fit: contain;
         }
 
-        /* 底部控制面板 */
-        .ui-panel { 
-            margin-top: 20px; 
-            display: flex; 
-            gap: 12px; 
-            height: 50px; 
-            align-items: center; 
+        #victory-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.96);
+            display: none;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
+            z-index: 100;
+            border-radius: 12px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .star-box { font-size: 40px; margin: 15px 0; display: flex; gap: 10px; }
+        .star { color: #ddd; }
+        .star.active { color: var(--star-gold); text-shadow: 0 0 10px rgba(255,204,51,0.5); animation: starPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        .victory-title { font-size: 24px; font-weight: bold; color: var(--border-dark); margin-bottom: 5px; }
+        .victory-stats { font-size: 16px; color: #888; margin-bottom: 25px; }
+
+        .btn-restart {
+            background: var(--progress-color); color: white;
+            padding: 12px 30px; border: none; border-radius: 50px;
+            font-size: 18px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(251, 140, 0, 0.3);
+            transition: transform 0.2s;
+        }
+
+        .ui-panel { 
+            margin-top: 15px; display: flex; gap: 12px; 
+            height: 50px; align-items: center; justify-content: center;
         }
 
         button { 
-            padding: 10px 18px; 
-            border: none; 
-            border-radius: 50px; 
-            background: white; 
-            color: #aaa; 
-            cursor: pointer; 
-            border: 2px solid #eee; 
-            font-weight: bold; 
-            font-size: 14px;
-            transition: all 0.2s;
+            padding: 10px 18px; border: none; border-radius: 50px; 
+            background: white; color: #aaa; cursor: pointer; 
+            border: 2px solid #eee; font-weight: bold; font-size: 14px;
+            transition: all 0.15s ease-out;
         }
 
         button.active-cmd { background: var(--accent); color: white; border-color: var(--accent); }
         
         #feed-btn { 
-            background: #ffd3b6; 
-            color: #d48166; 
-            visibility: hidden; 
-            border-color: #ffb7b2; 
+            background: #ffd3b6; color: #d48166; border-color: #ffb7b2; 
+            visibility: hidden; opacity: 0; transform: scale(0.8);
+            transition: visibility 0s, opacity 0.15s ease-out, transform 0.15s ease-out;
         }
-        #feed-btn.show { visibility: visible; animation: pop 0.3s forwards; }
+        #feed-btn.show { visibility: visible; opacity: 1; transform: scale(1); }
 
-        @keyframes pop { from {transform:scale(0)} to {transform:scale(1)} }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes starPop { from { transform: scale(0); } to { transform: scale(1); } }
+        @keyframes pulse-guide { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+        .click-guide { position: absolute; width: 100%; height: 100%; border: 3px dashed var(--accent); border-radius: 50px; top: 0; left: 0; pointer-events: none; animation: pulse-guide 1.2s infinite; }
     </style>
 </head>
 <body>
 
-    <div class="stats">🎨 移动物品◉ 用脚印点亮拼图：<span id="progress">0</span>% | 步数：<span id="moveCount">0</span></div>
+    <div class="header-ui">
+        <div class="stats-text">
+            <span>🐾 拼图完成度：<span id="progress-val" class="progress-highlight">0</span>%</span>
+            <span>◉移动步数：<span id="moveCount">0</span></span>
+        </div>
+        <div class="progress-container"><div id="progress-fill"></div></div>
+    </div>
+
+    <div class="game-guide-text">拖动物品 ◉ 用口令🥕引导小猫😸 点亮拼图🛆</div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="400"></canvas>
+        
+        <div id="victory-screen">
+            <div class="victory-title">✨ 挑战成功 ！蒸蚌！✨</div>
+            <div class="star-box">
+                <span id="star1" class="star">★</span>
+                <span id="star2" class="star">★</span>
+                <span id="star3" class="star">★</span>
+            </div>
+            <div id="victory-msg" class="victory-stats">使用了 0 步</div>
+            <button class="btn-restart" onclick="initGame()">再来一局</button>
+        </div>
     </div>
 
     <div class="ui-panel">
-        <button id="btn-carrot" onclick="triggerAction('carrot')">🥕 萝卜</button>
+        <div style="position: relative;">
+            <button id="btn-carrot" onclick="triggerAction('carrot')">🥕 萝卜</button>
+            <div id="carrot-guide" class="click-guide"></div>
+        </div>
         <button id="btn-tissue" onclick="triggerAction('tissue')">🧻 纸巾</button>
         <button id="feed-btn" onclick="triggerAction('feed')">🍲 投喂</button>
     </div>
@@ -108,29 +182,32 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const moveDisplay = document.getElementById('moveCount');
-    const progressDisplay = document.getElementById('progress');
+    const progressVal = document.getElementById('progress-val');
+    const progressFill = document.getElementById('progress-fill');
     const feedBtn = document.getElementById('feed-btn');
+    const carrotGuideUI = document.getElementById('carrot-guide');
+    const victoryScreen = document.getElementById('victory-screen');
+    const victoryMsg = document.getElementById('victory-msg');
 
     const AUDIO_CONFIG = { carrot: 'carrot.mp3', tissue: 'tissue.mp3', feed: 'feed1.mp3', win: 'feed2.mp3', unlock: 'unlock.mp3' };
     const sounds = {};
     for (let key in AUDIO_CONFIG) { sounds[key] = new Audio(AUDIO_CONFIG[key]); }
 
     let hasWon = false, moves = 0, draggingItem = null;
-    let lastMoveTime = Date.now();
-    let guideActive = false;    
-    let tutorialFinished = false; 
+    let clickTutorialFinished = false, lastMoveTime = Date.now(), guideActive = false, tutorialFinished = false; 
 
-    const shapes = [
-        { points: [[0,0], [600,0], [600,80], [400,80], [350,80], [250,80], [200,80], [0,80]], color: '#81d4fa', revealed: false, scale: 1, center: [300, 40] },
-        { points: [[0,80], [250,80], [220,220], [220,350], [0,350], [0,80]], color: '#81d4fa', revealed: false, scale: 1, center: [110, 215] },
-        { points: [[600,80], [350,80], [380,220], [380,350], [600,350], [600,80]], color: '#81d4fa', revealed: false, scale: 1, center: [490, 215] },
-        { points: [[0,350], [600,350], [600,400], [0,400]], color: '#81d4fa', revealed: false, scale: 1, center: [300, 375] },
-        { points: [[220,220], [380,220], [380,360], [220,360]], color: '#fb8c00', revealed: false, scale: 1, center: [300, 290] },
-        { points: [[250,80], [350,80], [380,220], [220,220]], color: '#ffa726', revealed: false, scale: 1, center: [300, 150] },
-        { points: [[250,80], [200,10], [290,80]], color: '#f57c00', revealed: false, scale: 1, center: [245, 55] },
-        { points: [[350,80], [400,10], [310,80]], color: '#f57c00', revealed: false, scale: 1, center: [355, 55] }
+    const initialShapes = [
+        { points: [[0,0], [600,0], [600,80], [400,80], [350,80], [250,80], [200,80], [0,80]], color: '#81d4fa', center: [300, 40] },
+        { points: [[0,80], [250,80], [220,220], [220,350], [0,350], [0,80]], color: '#81d4fa', center: [110, 215] },
+        { points: [[600,80], [350,80], [380,220], [380,350], [600,350], [600,80]], color: '#81d4fa', center: [490, 215] },
+        { points: [[0,350], [600,350], [600,400], [0,400]], color: '#81d4fa', center: [300, 375] },
+        { points: [[220,220], [380,220], [380,360], [220,360]], color: '#fb8c00', center: [300, 290] },
+        { points: [[250,80], [350,80], [380,220], [220,220]], color: '#ffa726', center: [300, 150] },
+        { points: [[250,80], [200,10], [290,80]], color: '#f57c00', center: [245, 55] },
+        { points: [[350,80], [400,10], [310,80]], color: '#f57c00', center: [355, 55] }
     ];
 
+    let shapes = [];
     let items = {
         carrot: { x: 80, y: 350, color: '#ffad60', radius: 28 },
         tissue: { x: 520, y: 150, color: '#95e1d3', radius: 28 },
@@ -139,12 +216,15 @@
 
     let cat = { x: 300, y: 200, targetX: 300, targetY: 200, state: 'IDLE', speed: 0, rotation: 0, spinLeft: 0, pivotX: null, pivotY: null, currentCommand: null, currentTargetKey: null, visitHistory: [] };
 
-    function resetGame() {
-        moves = 0; hasWon = false;
-        lastMoveTime = Date.now();
-        guideActive = false;
-        moveDisplay.innerText = "0"; progressDisplay.innerText = "0";
-        shapes.forEach(s => { s.revealed = false; s.scale = 1; });
+    function initGame() {
+        hasWon = false; moves = 0;
+        lastMoveTime = Date.now(); guideActive = false;
+        moveDisplay.innerText = "0"; 
+        updateProgressUI(0);
+        victoryScreen.style.display = 'none';
+        document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+        
+        shapes = initialShapes.map(s => ({ ...s, revealed: false, scale: 1 }));
         items.carrot.x = 80; items.carrot.y = 350;
         items.tissue.x = 520; items.tissue.y = 150;
         items.slipper.x = 300; items.slipper.y = 340;
@@ -155,8 +235,36 @@
         feedBtn.classList.remove('show');
     }
 
+    function updateProgressUI(val) {
+        const oldVal = parseInt(progressVal.innerText);
+        progressVal.innerText = val;
+        progressFill.style.width = val + '%';
+        if (val > oldVal) {
+            progressVal.classList.remove('bump');
+            void progressVal.offsetWidth;
+            progressVal.classList.add('bump');
+        }
+    }
+
+    function showVictory() {
+        hasWon = true;
+        victoryScreen.style.display = 'flex';
+        victoryMsg.innerText = ` ${moves} 步就完成了拼图！全网最佳：1步`;
+        let stars = moves <= 1 ? 3 : (moves <= 5 ? 2 : 1);
+        for(let i=1; i<=3; i++) {
+            const star = document.getElementById(`star${i}`);
+            if(i <= stars) setTimeout(() => star.classList.add('active'), i * 200);
+        }
+        sounds.win.play().catch(()=>{});
+    }
+
     function triggerAction(type) {
         if (hasWon) return;
+        if (type === 'carrot' && !clickTutorialFinished) {
+            clickTutorialFinished = true;
+            carrotGuideUI.style.display = 'none';
+            lastMoveTime = Date.now();
+        }
         Object.values(sounds).forEach(s => { if(s.paused && s.currentTime === 0) s.load(); });
         const s = sounds[type];
         if (s) { s.pause(); s.currentTime = 0; s.play().catch(()=>{}); }
@@ -169,8 +277,8 @@
                 s.revealed = true; s.scale = 1.15;
                 if (sounds.unlock) { let click = sounds.unlock.cloneNode(); click.play().catch(()=>{}); }
                 const prog = Math.floor((shapes.filter(sh=>sh.revealed).length/shapes.length)*100);
-                progressDisplay.innerText = prog;
-                if (prog === 100 && !hasWon) { hasWon = true; sounds.win.play().catch(()=>{}); }
+                updateProgressUI(prog);
+                if (prog === 100 && !hasWon) showVictory();
             }
         });
     }
@@ -183,7 +291,7 @@
     }
 
     function handleStart(e) {
-        if (hasWon) { resetGame(); return; }
+        if (hasWon) return;
         const pos = getPos(e);
         for (let key in items) {
             let it = items[key];
@@ -194,21 +302,13 @@
         }
     }
 
-    function handleEnd() {
-        if (draggingItem) {
-            tutorialFinished = true;
-            guideActive = false;
-            lastMoveTime = Date.now();
-            draggingItem = null;
-        }
-    }
+    function handleEnd() { if (draggingItem) { tutorialFinished = true; guideActive = false; lastMoveTime = Date.now(); draggingItem = null; } }
 
     function handleMove(e) {
         if (draggingItem && !hasWon) { 
             const pos = getPos(e);
-            const r = draggingItem.radius;
-            draggingItem.x = Math.max(r + 5, Math.min(600 - r - 5, pos.x));
-            draggingItem.y = Math.max(r + 5, Math.min(400 - r - 5, pos.y));
+            draggingItem.x = Math.max(30, Math.min(570, pos.x));
+            draggingItem.y = Math.max(30, Math.min(370, pos.y));
             if (e.cancelable) e.preventDefault();
         }
     }
@@ -248,28 +348,19 @@
         const allKeys = Object.keys(items);
         let filtered = allKeys.filter(k => !cat.visitHistory.includes(k));
         if (filtered.length === 0) filtered = allKeys.filter(k => k !== cat.currentTargetKey);
-        const nextKey = filtered[Math.floor(Math.random() * filtered.length)];
-        cat.currentTargetKey = nextKey;
+        cat.currentTargetKey = filtered[Math.floor(Math.random() * filtered.length)];
     }
 
     function update() {
         if (cat.state === 'WALKING' && cat.currentTargetKey) {
             cat.targetX = items[cat.currentTargetKey].x;
             cat.targetY = items[cat.currentTargetKey].y;
-        }
-
-        if (cat.state === 'WALKING') {
             let dx = cat.targetX - cat.x, dy = cat.targetY - cat.y;
             let dist = Math.hypot(dx, dy);
-            let targetSpeed = (dist < 100) ? 1.5 : 4.5;
-            cat.speed += (targetSpeed - cat.speed) * 0.1;
-            if (dist > 5) { cat.x += (dx/dist) * cat.speed; cat.y += (dy/dist) * cat.speed; } else { pickNextPatrolTarget(); }
+            cat.speed += ((dist < 100 ? 1.5 : 4.5) - cat.speed) * 0.1;
+            if (dist > 5) { cat.x += (dx/dist) * cat.speed; cat.y += (dy/dist) * cat.speed; } 
+            else { pickNextPatrolTarget(); }
             checkPuzzleUnlock();
-            if (cat.currentCommand) {
-                let targetItem = items[cat.currentCommand];
-                if (Math.hypot(cat.x - targetItem.x, cat.y - targetItem.y) < 120) feedBtn.classList.add('show');
-                else feedBtn.classList.remove('show');
-            }
         } else if (cat.state === 'FEEDING') {
             if (cat.spinLeft > 0) {
                 cat.rotation += 15; cat.spinLeft -= 15;
@@ -277,8 +368,15 @@
                 cat.x = cat.pivotX + Math.cos(cat.spinLeft * Math.PI/180) * 20;
                 cat.y = cat.pivotY + Math.sin(cat.spinLeft * Math.PI/180) * 20;
                 checkPuzzleUnlock();
-            } else { cat.state = 'IDLE'; cat.rotation = 0; cat.pivotX = null; cat.speed = 0; }
+            } else { cat.state = 'IDLE'; cat.rotation = 0; cat.pivotX = null; }
         }
+
+        if (cat.state === 'WALKING' && cat.currentCommand) {
+            const it = items[cat.currentCommand];
+            if (Math.hypot(cat.x - it.x, cat.y - it.y) < 120) feedBtn.classList.add('show');
+            else feedBtn.classList.remove('show');
+        } else { feedBtn.classList.remove('show'); }
+
         shapes.forEach(s => { if(s.scale > 1) s.scale -= 0.01; });
         draw();
         requestAnimationFrame(update);
@@ -289,11 +387,12 @@
         shapes.forEach(s => {
             ctx.save();
             ctx.translate(s.center[0], s.center[1]); ctx.scale(s.scale, s.scale); ctx.translate(-s.center[0], -s.center[1]);
-            ctx.globalAlpha = s.revealed ? 1.0 : 0.1;
-            ctx.fillStyle = s.color;
             ctx.beginPath(); ctx.moveTo(s.points[0][0], s.points[0][1]);
             for(let i=1; i<s.points.length; i++) ctx.lineTo(s.points[i][0], s.points[i][1]);
-            ctx.closePath(); ctx.fill(); ctx.restore();
+            ctx.closePath();
+            if (s.revealed) { ctx.fillStyle = s.color; ctx.fill(); }
+            else { ctx.fillStyle = "#f9f9f9"; ctx.fill(); ctx.strokeStyle = "#e8e8e8"; ctx.lineWidth = 2; ctx.stroke(); }
+            ctx.restore();
         });
 
         for (let key in items) {
@@ -308,42 +407,45 @@
             ctx.restore();
         }
 
-        if (!tutorialFinished && !hasWon) {
+        // --- 核心修复与优化：缩短至20秒，加深蓝色指示圈 ---
+        if (clickTutorialFinished && !tutorialFinished && !hasWon) {
             let timeSinceMove = (Date.now() - lastMoveTime) / 1000;
-            if (guideActive || timeSinceMove > 30) {
+            if (timeSinceMove > 20 || guideActive) { // 缩短为20秒触发
                 guideActive = true; 
-                let pulse = 1 + Math.sin(Date.now() / 300) * 0.15;
-                let ringRadius = items.carrot.radius * pulse * 1.3;
+                let pulse = 1 + Math.sin(Date.now() / 250) * 0.2; // 加大跳动幅度
                 ctx.save();
-                ctx.fillStyle = "rgba(212, 129, 102, 0.9)";
-                ctx.font = "bold 18px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("✨ 可以移动物品改变小猫行动哦 ✨", 300, 30);
-                ctx.setLineDash([6, 4]);
-                ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.arc(items.carrot.x, items.carrot.y, ringRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(255, 173, 96, 0.8)"; ctx.stroke();
-                ctx.beginPath(); ctx.arc(200, 60, ringRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(129, 212, 250, 0.8)"; ctx.stroke();
+                ctx.fillStyle = "rgba(212, 129, 102, 0.9)"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("✨ 移动物品改变小猫行动 ✨", 300, 30);
+                
+                ctx.setLineDash([8, 4]); ctx.lineWidth = 4; // 加宽线条
+                
+                // 1. 橙色脉动圈
+                ctx.beginPath();
+                ctx.arc(items.carrot.x, items.carrot.y, items.carrot.radius * pulse * 1.3, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(255, 173, 96, 0.9)";
+                ctx.stroke();
+
+                // 2. 目标脉动圈：改为醒目的深青蓝色 (Teal)
+                ctx.beginPath();
+                ctx.arc(200, 60, items.carrot.radius * pulse * 1.3, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(0, 137, 123, 0.85)"; 
+                ctx.stroke();
+                
                 ctx.restore();
             }
         }
 
         ctx.save(); ctx.translate(cat.x, cat.y); ctx.rotate(cat.rotation * Math.PI / 180);
-        ctx.fillStyle = "#555"; ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(-15,-20); ctx.lineTo(-4,-12); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(10,-8); ctx.lineTo(15,-20); ctx.lineTo(4,-12); ctx.fill();
-        ctx.fillStyle = "#f8f8f8"; ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = "#333"; ctx.beginPath(); ctx.arc(-6, -2, 2, 0, Math.PI*2); ctx.arc(6, -2, 2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "#d0d0d0"; ctx.lineWidth = 1.5; ctx.fillStyle = "#555"; 
+        ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(-15,-20); ctx.lineTo(-4,-12); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(10,-8); ctx.lineTo(15,-20); ctx.lineTo(4,-12); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fillStyle = "#f8f8f8"; ctx.fill();
+        ctx.strokeStyle = "#d0d0d0"; ctx.stroke(); ctx.fillStyle = "#333"; 
+        ctx.beginPath(); ctx.arc(-6, -2, 2, 0, Math.PI*2); ctx.arc(6, -2, 2, 0, Math.PI*2); ctx.fill();
         ctx.restore();
-
-        if(hasWon) {
-            ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fillRect(0,0,600,400);
-            ctx.fillStyle = "#6d5d6e"; ctx.font = "bold 26px sans-serif"; ctx.textAlign="center";
-            ctx.fillText(`✨蒸蚌！${moves}步就完成了拼图！✨`, 300, 180);
-            ctx.font = "16px sans-serif"; ctx.fillStyle = "#aaa";
-            ctx.fillText(`全网最佳：1步 是否重新挑战？`, 300, 240);
-        }
     }
+
+    initGame();
     update();
 </script>
 </body>
