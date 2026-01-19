@@ -21,6 +21,24 @@
             overflow: hidden;
         }
 
+        /* 右侧 GIF 样式 */
+        .side-gif {
+            position: fixed;
+            right: 20%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            z-index: 10;
+            pointer-events: none; /* 防止图片遮挡点击 */
+        }
+
+        /* 窄屏适配：隐藏右侧图防止遮挡游戏 */
+        @media (max-width: 1100px) {
+            .side-gif { display: none; }
+        }
+
         .header-ui {
             width: 100%;
             max-width: 600px;
@@ -30,6 +48,7 @@
             flex-direction: column;
             align-items: center;
             gap: 6px;
+            z-index: 20;
         }
 
         .stats-text { 
@@ -60,14 +79,6 @@
         }
         .bump { transform: scale(1.4); }
 
-        .game-guide-text {
-            font-size: 13px;
-            color: #a09383;
-            margin-bottom: 8px;
-            letter-spacing: 1px;
-            font-weight: 500;
-        }
-
         #game-container { 
             position: relative; 
             border: 6px solid var(--border-dark); 
@@ -79,6 +90,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 20;
         }
 
         canvas { 
@@ -107,13 +119,7 @@
         .victory-title { font-size: 24px; font-weight: bold; color: var(--border-dark); margin-bottom: 5px; }
         .victory-stats { font-size: 16px; color: #888; margin-bottom: 25px; }
 
-        /* 结算界面按钮组样式 */
-        .victory-btns {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            width: 100%;
-        }
+        .victory-btns { display: flex; gap: 15px; justify-content: center; width: 100%; }
 
         .btn-restart {
             background: var(--progress-color); color: white;
@@ -136,6 +142,7 @@
         .ui-panel { 
             margin-top: 15px; display: flex; gap: 12px; 
             height: 50px; align-items: center; justify-content: center;
+            z-index: 20;
         }
 
         .ui-panel button { 
@@ -162,6 +169,8 @@
 </head>
 <body>
 
+    <img src="carrottissuecat.gif" class="side-gif" alt="Cat Decor">
+
     <div class="header-ui">
         <div class="stats-text">
             <span>🐾 拼图完成度：<span id="progress-val" class="progress-highlight">0</span>%</span>
@@ -170,11 +179,8 @@
         <div class="progress-container"><div id="progress-fill"></div></div>
     </div>
 
-    <div class="game-guide-text">拖动物品 ◉ 用口令🥕引导小猫😸 点亮拼图🛆</div>
-
     <div id="game-container">
         <canvas id="gameCanvas" width="600" height="400"></canvas>
-        
         <div id="victory-screen">
             <div class="victory-title">✨ 挑战成功 ！蒸蚌！✨</div>
             <div class="star-box">
@@ -216,6 +222,7 @@
 
     let hasWon = false, moves = 0, draggingItem = null;
     let clickTutorialFinished = false, lastMoveTime = Date.now(), guideActive = false, tutorialFinished = false; 
+    let lastTimestamp = 0; 
 
     const initialShapes = [
         { points: [[0,0], [600,0], [600,80], [400,80], [350,80], [250,80], [200,80], [0,80]], color: '#81d4fa', center: [300, 40] },
@@ -235,7 +242,7 @@
         slipper: { x: 300, y: 340, color: '#aa96da', radius: 28 }
     };
 
-    let cat = { x: 300, y: 200, targetX: 300, targetY: 200, state: 'IDLE', speed: 0, rotation: 0, spinLeft: 0, pivotX: null, pivotY: null, currentCommand: null, currentTargetKey: null, visitHistory: [] };
+    let cat = { x: 300, y: 200, targetX: 300, targetY: 200, state: 'IDLE', prevState: 'IDLE', speed: 0, rotation: 0, spinLeft: 0, pivotX: null, pivotY: null, currentCommand: null, currentTargetKey: null, visitHistory: [] };
 
     function initGame() {
         hasWon = false; moves = 0;
@@ -244,16 +251,16 @@
         updateProgressUI(0);
         victoryScreen.style.display = 'none';
         document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
-        
         shapes = initialShapes.map(s => ({ ...s, revealed: false, scale: 1 }));
         items.carrot.x = 80; items.carrot.y = 350;
         items.tissue.x = 520; items.tissue.y = 150;
         items.slipper.x = 300; items.slipper.y = 340;
         cat.x = 300; cat.y = 200; cat.targetX = 300; cat.targetY = 200;
-        cat.state = 'IDLE'; cat.rotation = 0; cat.speed = 0;
+        cat.state = 'IDLE'; cat.prevState = 'IDLE'; cat.rotation = 0; cat.speed = 0;
         cat.currentCommand = null; cat.currentTargetKey = null; cat.visitHistory = [];
         document.querySelectorAll('.ui-panel button').forEach(b => b.classList.remove('active-cmd'));
         feedBtn.classList.remove('show');
+        lastTimestamp = 0;
     }
 
     function updateProgressUI(val) {
@@ -286,29 +293,9 @@
             carrotGuideUI.style.display = 'none';
             lastMoveTime = Date.now();
         }
-        Object.values(sounds).forEach(s => { if(s.paused && s.currentTime === 0) s.load(); });
         const s = sounds[type];
         if (s) { s.pause(); s.currentTime = 0; s.play().catch(()=>{}); }
         if (type === 'feed') feedCat(); else setCommand(type);
-    }
-
-    function checkPuzzleUnlock() {
-        shapes.forEach(s => {
-            if (!s.revealed && isPointInPoly([cat.x, cat.y], s.points)) {
-                s.revealed = true; s.scale = 1.15;
-                if (sounds.unlock) { let click = sounds.unlock.cloneNode(); click.play().catch(()=>{}); }
-                const prog = Math.floor((shapes.filter(sh=>sh.revealed).length/shapes.length)*100);
-                updateProgressUI(prog);
-                if (prog === 100 && !hasWon) showVictory();
-            }
-        });
-    }
-
-    function getPos(e) {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: (clientX - rect.left) * (600/rect.width), y: (clientY - rect.top) * (400/rect.height) };
     }
 
     function handleStart(e) {
@@ -317,13 +304,20 @@
         for (let key in items) {
             let it = items[key];
             if (Math.hypot(it.x - pos.x, it.y - pos.y) < 35) {
-                if (cat.state === 'WALKING' && key === cat.currentTargetKey) return; 
-                draggingItem = it; moves++; moveDisplay.innerText = moves; break;
+                draggingItem = it; 
+                moves++; moveDisplay.innerText = moves; 
+                if (cat.state !== 'WAITING') { cat.prevState = cat.state; cat.state = 'WAITING'; }
+                break;
             }
         }
     }
 
-    function handleEnd() { if (draggingItem) { tutorialFinished = true; guideActive = false; lastMoveTime = Date.now(); draggingItem = null; } }
+    function handleEnd() { 
+        if (draggingItem) { 
+            tutorialFinished = true; guideActive = false; lastMoveTime = Date.now(); draggingItem = null; 
+            if (cat.state === 'WAITING') { cat.state = cat.prevState || 'IDLE'; }
+        } 
+    }
 
     function handleMove(e) {
         if (draggingItem && !hasWon) { 
@@ -332,6 +326,13 @@
             draggingItem.y = Math.max(30, Math.min(370, pos.y));
             if (e.cancelable) e.preventDefault();
         }
+    }
+
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: (clientX - rect.left) * (600/rect.width), y: (clientY - rect.top) * (400/rect.height) };
     }
 
     canvas.addEventListener('mousedown', handleStart);
@@ -372,19 +373,29 @@
         cat.currentTargetKey = filtered[Math.floor(Math.random() * filtered.length)];
     }
 
-    function update() {
+    function update(timestamp) {
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        let dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1); 
+        lastTimestamp = timestamp;
+        const frameScale = dt * 60; 
+
         if (cat.state === 'WALKING' && cat.currentTargetKey) {
             cat.targetX = items[cat.currentTargetKey].x;
             cat.targetY = items[cat.currentTargetKey].y;
             let dx = cat.targetX - cat.x, dy = cat.targetY - cat.y;
             let dist = Math.hypot(dx, dy);
-            cat.speed += ((dist < 100 ? 1.5 : 4.5) - cat.speed) * 0.1;
-            if (dist > 5) { cat.x += (dx/dist) * cat.speed; cat.y += (dy/dist) * cat.speed; } 
+            cat.speed += ((dist < 100 ? 1.5 : 4.5) - cat.speed) * 0.1 * frameScale;
+            if (dist > 5) { cat.x += (dx/dist) * cat.speed * frameScale; cat.y += (dy/dist) * cat.speed * frameScale; } 
             else { pickNextPatrolTarget(); }
             checkPuzzleUnlock();
-        } else if (cat.state === 'FEEDING') {
+        } 
+        else if (cat.state === 'WAITING') {
+            cat.speed *= Math.pow(0.8, frameScale);
+        }
+        else if (cat.state === 'FEEDING') {
             if (cat.spinLeft > 0) {
-                cat.rotation += 15; cat.spinLeft -= 15;
+                let spinStep = 15 * frameScale;
+                cat.rotation += spinStep; cat.spinLeft -= spinStep;
                 if (!cat.pivotX) { cat.pivotX = cat.x; cat.pivotY = cat.y; }
                 cat.x = cat.pivotX + Math.cos(cat.spinLeft * Math.PI/180) * 20;
                 cat.y = cat.pivotY + Math.sin(cat.spinLeft * Math.PI/180) * 20;
@@ -398,9 +409,21 @@
             else feedBtn.classList.remove('show');
         } else { feedBtn.classList.remove('show'); }
 
-        shapes.forEach(s => { if(s.scale > 1) s.scale -= 0.01; });
+        shapes.forEach(s => { if(s.scale > 1) s.scale -= 0.01 * frameScale; });
         draw();
         requestAnimationFrame(update);
+    }
+
+    function checkPuzzleUnlock() {
+        shapes.forEach(s => {
+            if (!s.revealed && isPointInPoly([cat.x, cat.y], s.points)) {
+                s.revealed = true; s.scale = 1.15;
+                if (sounds.unlock) { let click = sounds.unlock.cloneNode(); click.play().catch(()=>{}); }
+                const prog = Math.floor((shapes.filter(sh=>sh.revealed).length/shapes.length)*100);
+                updateProgressUI(prog);
+                if (prog === 100 && !hasWon) showVictory();
+            }
+        });
     }
 
     function draw() {
@@ -419,38 +442,19 @@
         for (let key in items) {
             let it = items[key];
             ctx.save();
-            ctx.beginPath(); ctx.arc(it.x, it.y, it.radius + 3, 0, Math.PI*2);
-            ctx.fillStyle = "white"; ctx.fill();
-            ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2);
-            ctx.fillStyle = it.color; ctx.fill();
+            ctx.beginPath(); ctx.arc(it.x, it.y, it.radius + 3, 0, Math.PI*2); ctx.fillStyle = "white"; ctx.fill();
+            ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2); ctx.fillStyle = it.color; ctx.fill();
             ctx.fillStyle = "white"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillText((key==='carrot'?'萝卜':(key==='tissue'?'纸巾':'拖鞋')), it.x, it.y);
             ctx.restore();
         }
 
-        if (clickTutorialFinished && !tutorialFinished && !hasWon) {
-            let timeSinceMove = (Date.now() - lastMoveTime) / 1000;
-            if (timeSinceMove > 10 || guideActive) { 
-                guideActive = true; 
-                let pulse = 1 + Math.sin(Date.now() / 250) * 0.2;
-                ctx.save();
-                ctx.fillStyle = "rgba(212, 129, 102, 0.9)"; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
-                ctx.fillText("✨ 移动物品改变小猫行动 ✨", 300, 30);
-                
-                ctx.setLineDash([8, 4]); ctx.lineWidth = 4; 
-                
-                ctx.beginPath();
-                ctx.arc(items.carrot.x, items.carrot.y, items.carrot.radius * pulse * 1.3, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(255, 173, 96, 0.9)";
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(200, 60, items.carrot.radius * pulse * 1.3, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(0, 137, 123, 0.85)"; 
-                ctx.stroke();
-                
-                ctx.restore();
-            }
+        if (cat.state === 'WAITING' && !hasWon) {
+            ctx.save();
+            let bounce = Math.sin(Date.now() / 150) * 5;
+            ctx.fillStyle = "#ff6b6b"; ctx.font = "bold 24px Arial"; ctx.textAlign = "center";
+            ctx.fillText("?", cat.x, cat.y - 35 + bounce);
+            ctx.restore();
         }
 
         ctx.save(); ctx.translate(cat.x, cat.y); ctx.rotate(cat.rotation * Math.PI / 180);
@@ -464,7 +468,7 @@
     }
 
     initGame();
-    update();
+    requestAnimationFrame(update);
 </script>
 </body>
 </html>
